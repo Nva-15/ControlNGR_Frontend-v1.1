@@ -41,14 +41,9 @@
         No se encontro un registro facial para su cuenta.<br>
         Solicite a un administrador o supervisor que registre su rostro desde la seccion de empleados.
       </p>
-      <div class="d-flex justify-content-center gap-3 flex-wrap">
-        <button class="btn btn-outline-primary" (click)="marcajeManual()">
-          <i class="bi bi-hand-index me-2"></i>Marcaje Manual
-        </button>
-        <button class="btn btn-outline-secondary" (click)="volverAlDashboard()">
-          <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
-        </button>
-      </div>
+      <button class="btn btn-outline-secondary" (click)="volverAlDashboard()">
+        <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
+      </button>
     </div>
   </div>
 
@@ -98,14 +93,9 @@
         Ahora registre su salida.
       </div>
 
-      <div class="d-flex justify-content-center gap-3 flex-wrap">
-        <button class="btn btn-primary btn-lg" (click)="abrirCamara()">
-          <i class="bi bi-camera-video me-2"></i>Activar Camara
-        </button>
-        <button class="btn btn-outline-secondary" (click)="marcajeManual()">
-          <i class="bi bi-hand-index me-2"></i>Marcaje Manual
-        </button>
-      </div>
+      <button class="btn btn-primary btn-lg" (click)="abrirCamara()">
+        <i class="bi bi-camera-video me-2"></i>Activar Camara
+      </button>
     </div>
   </div>
 
@@ -122,6 +112,10 @@
                class="rounded border video-feed"
                style="transform: scaleX(-1);">
         </video>
+        <canvas id="marcajeOverlay"
+                class="position-absolute top-0 start-0 w-100 h-100"
+                style="pointer-events: none;">
+        </canvas>
 
         <!-- Overlay de verificacion -->
         <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center rounded"
@@ -136,25 +130,24 @@
         </div>
       </div>
 
-      <div class="mb-3">
+      <div class="mb-3 d-flex justify-content-center align-items-center gap-2">
         <span class="badge" [ngClass]="tipoMarcaje === 'entrada' ? 'bg-success' : 'bg-danger'" style="font-size: 0.9rem;">
           {{ tipoMarcaje === 'entrada' ? 'Entrada' : 'Salida' }}
         </span>
+        <span class="badge"
+              [ngClass]="livenessConfirmed ? 'bg-success' : 'bg-warning text-dark'"
+              style="font-size: 0.85rem;">
+          <i class="bi" [ngClass]="livenessConfirmed ? 'bi-shield-fill-check' : 'bi-eye'"></i>
+          {{ livenessConfirmed ? 'Persona real' : 'Mire a la camara...' }}
+        </span>
       </div>
 
-      <div class="d-flex justify-content-center gap-3 flex-wrap">
-        <button class="btn btn-success btn-lg"
-                (click)="verificarYMarcar()"
-                [disabled]="isVerifying">
-          <i class="bi bi-shield-check me-2"></i>
-          {{ isVerifying ? 'Verificando...' : 'Verificar y Marcar' }}
-        </button>
-        <button class="btn btn-outline-secondary"
-                (click)="marcajeManual()"
-                [disabled]="isVerifying">
-          <i class="bi bi-hand-index me-2"></i>Manual
-        </button>
-      </div>
+      <button class="btn btn-success btn-lg"
+              (click)="verificarYMarcar()"
+              [disabled]="isVerifying || !livenessConfirmed">
+        <i class="bi bi-shield-check me-2"></i>
+        {{ isVerifying ? 'Verificando...' : !livenessConfirmed ? 'Esperando deteccion de vida...' : 'Verificar y Marcar' }}
+      </button>
     </div>
   </div>
 

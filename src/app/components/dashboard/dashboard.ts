@@ -791,6 +791,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
         const video = document.getElementById('perfilEnrollVideo') as HTMLVideoElement;
         if (video) {
           video.srcObject = stream;
+          video.onloadeddata = () => {
+            const canvas = document.getElementById('perfilEnrollOverlay') as HTMLCanvasElement;
+            if (canvas) {
+              this.faceRecognition.startOverlay(video, canvas);
+            }
+          };
         }
       }, 100);
     } catch {
@@ -875,6 +881,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   detenerCamaraPerfil() {
+    this.faceRecognition.stopOverlay();
     if (this.videoStreamPerfil) {
       this.videoStreamPerfil.getTracks().forEach(track => track.stop());
       this.videoStreamPerfil = null;

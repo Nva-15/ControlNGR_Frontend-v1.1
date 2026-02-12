@@ -1094,6 +1094,12 @@ export class EmpleadosComponent implements OnInit, OnDestroy {
         const videoElement = document.getElementById('enrollVideo') as HTMLVideoElement;
         if (videoElement) {
           videoElement.srcObject = stream;
+          videoElement.onloadeddata = () => {
+            const canvas = document.getElementById('enrollOverlay') as HTMLCanvasElement;
+            if (canvas) {
+              this.faceRecognition.startOverlay(videoElement, canvas);
+            }
+          };
         }
       }, 100);
     } catch {
@@ -1164,6 +1170,7 @@ export class EmpleadosComponent implements OnInit, OnDestroy {
   }
 
   detenerCamaraEnroll() {
+    this.faceRecognition.stopOverlay();
     if (this.videoStreamEnroll) {
       this.videoStreamEnroll.getTracks().forEach(track => track.stop());
       this.videoStreamEnroll = null;

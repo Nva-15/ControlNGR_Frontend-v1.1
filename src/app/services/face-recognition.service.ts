@@ -168,6 +168,140 @@ export class FaceRecognitionService {
     return (vertical1 + vertical2) / (2.0 * horizontal);
   }
 
+  // --- Face Detection Overlay con Liveness pasivo (varianza EAR) ---
+
+  private overlayInterval: any = null;
+  livenessConfirmed = false;
+  private _earHistory: number[] = [];
+  private readonly EAR_HISTORY_SIZE = 12;
+  private readonly EAR_VARIANCE_THRESHOLD = 0.0004;
+  private _onLivenessChange: ((confirmed: boolean) => void) | null = null;
+
+  startOverlay(
+    video: HTMLVideoElement,
+    canvas: HTMLCanvasElement,
+    options?: { detectLiveness?: boolean; onLivenessChange?: (confirmed: boolean) => void }
+  ): void {
+    this.stopOverlay();
+    this.livenessConfirmed = false;
+    this._earHistory = [];
+    this._onLivenessChange = options?.onLivenessChange || null;
+    const detectLiveness = options?.detectLiveness ?? false;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    this.overlayInterval = setInterval(async () => {
+      if (video.paused || video.ended) return;
+
+      const displayWidth = video.clientWidth;
+      const displayHeight = video.clientHeight;
+      canvas.width = displayWidth;
+      canvas.height = displayHeight;
+
+      const detection = await faceapi
+        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+        .withFaceLandmarks();
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (detection) {
+        const scaleX = displayWidth / video.videoWidth;
+        const scaleY = displayHeight / video.videoHeight;
+        const box = detection.detection.box;
+        const mirroredX = displayWidth - (box.x * scaleX) - (box.width * scaleX);
+
+        const color = (!detectLiveness || this.livenessConfirmed) ? '#00ff88' : '#00d4ff';
+
+        // Rectángulo
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 6;
+        ctx.strokeRect(mirroredX, box.y * scaleY, box.width * scaleX, box.height * scaleY);
+        ctx.shadowBlur = 0;
+
+        // Esquinas decorativas
+        const cornerLen = 15;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        const bx = mirroredX, by = box.y * scaleY;
+        const bw = box.width * scaleX, bh = box.height * scaleY;
+
+        ctx.beginPath(); ctx.moveTo(bx, by + cornerLen); ctx.lineTo(bx, by); ctx.lineTo(bx + cornerLen, by); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bx + bw - cornerLen, by); ctx.lineTo(bx + bw, by); ctx.lineTo(bx + bw, by + cornerLen); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bx, by + bh - cornerLen); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + cornerLen, by + bh); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bx + bw - cornerLen, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.lineTo(bx + bw, by + bh - cornerLen); ctx.stroke();
+
+        // Landmarks
+        const landmarks = detection.landmarks.positions;
+        ctx.fillStyle = color;
+        for (const point of landmarks) {
+          const mx = displayWidth - (point.x * scaleX);
+          ctx.beginPath();
+          ctx.arc(mx, point.y * scaleY, 1.5, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+
+        // Etiqueta
+        const score = Math.round(detection.detection.score * 100);
+        ctx.font = '12px Arial';
+        ctx.fillStyle = color;
+        ctx.fillText(`Rostro ${score}%`, mirroredX, by - 6);
+
+        // --- Liveness por varianza de EAR ---
+        if (detectLiveness && !this.livenessConfirmed) {
+          const leftEye = detection.landmarks.getLeftEye();
+          const rightEye = detection.landmarks.getRightEye();
+          const earLeft = this.computeEAR(leftEye);
+          const earRight = this.computeEAR(rightEye);
+          const ear = (earLeft + earRight) / 2;
+
+          this._earHistory.push(ear);
+          if (this._earHistory.length > this.EAR_HISTORY_SIZE) {
+            this._earHistory.shift();
+          }
+
+          // Cuando tenemos suficientes muestras, calcular varianza
+          if (this._earHistory.length >= this.EAR_HISTORY_SIZE) {
+            const mean = this._earHistory.reduce((a, b) => a + b, 0) / this._earHistory.length;
+            const variance = this._earHistory.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / this._earHistory.length;
+
+            if (variance > this.EAR_VARIANCE_THRESHOLD) {
+              this.livenessConfirmed = true;
+              if (this._onLivenessChange) {
+                this._onLivenessChange(true);
+              }
+            }
+          }
+        }
+
+        // Badge de liveness en el canvas
+        if (detectLiveness) {
+          const badgeY = by + bh + 20;
+          if (this.livenessConfirmed) {
+            ctx.font = 'bold 13px Arial';
+            ctx.fillStyle = '#00ff88';
+            ctx.fillText('Persona real', mirroredX, badgeY);
+          } else {
+            const progress = Math.min(this._earHistory.length, this.EAR_HISTORY_SIZE);
+            ctx.font = '11px Arial';
+            ctx.fillStyle = '#ffcc00';
+            ctx.fillText(`Analizando... (${progress}/${this.EAR_HISTORY_SIZE})`, mirroredX, badgeY);
+          }
+        }
+      }
+    }, 150);
+  }
+
+  stopOverlay(): void {
+    if (this.overlayInterval) {
+      clearInterval(this.overlayInterval);
+      this.overlayInterval = null;
+    }
+    this._onLivenessChange = null;
+  }
+
   // --- Backend API calls ---
 
   enrollFace(request: FaceEnrollRequest): Observable<any> {

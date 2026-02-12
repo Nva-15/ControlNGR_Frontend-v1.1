@@ -31,6 +31,7 @@ export class MarcarAsistencia implements OnInit, OnDestroy {
   verificationResult: { match: boolean; confidence: number } | null = null;
   marcajeRegistrado = false;
   livenessMessage = '';
+  livenessConfirmed = false;
 
   asistenciaHoy: any = null;
   tipoMarcaje: 'entrada' | 'salida' = 'entrada';
@@ -114,10 +115,23 @@ export class MarcarAsistencia implements OnInit, OnDestroy {
       this.videoStream = stream;
       this.estado = 'camara-activa';
 
+      this.livenessConfirmed = false;
+
       setTimeout(() => {
         const video = document.getElementById('marcajeVideo') as HTMLVideoElement;
         if (video) {
           video.srcObject = stream;
+          video.onloadeddata = () => {
+            const canvas = document.getElementById('marcajeOverlay') as HTMLCanvasElement;
+            if (canvas) {
+              this.faceRecognition.startOverlay(video, canvas, {
+                detectLiveness: true,
+                onLivenessChange: (confirmed) => {
+                  this.livenessConfirmed = confirmed;
+                }
+              });
+            }
+          };
         }
       }, 100);
     } catch {
@@ -201,12 +215,8 @@ export class MarcarAsistencia implements OnInit, OnDestroy {
     }
   }
 
-  marcajeManual() {
-    this.detenerCamara();
-    this.router.navigate(['/dashboard']);
-  }
-
   detenerCamara() {
+    this.faceRecognition.stopOverlay();
     if (this.videoStream) {
       this.videoStream.getTracks().forEach(track => track.stop());
       this.videoStream = null;
