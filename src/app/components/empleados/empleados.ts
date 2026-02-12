@@ -9,6 +9,7 @@ import { ExportService } from '../../services/export';
 import { EmpleadoResponse } from '../../interfaces/empleado';
 import { NotificationService } from '../../services/notification.service';
 import { ApiConfigService } from '../../services/api-config.service';
+import { FaceRecognitionService } from '../../services/face-recognition.service';
 
 @Component({
   selector: 'app-empleados',
@@ -29,6 +30,7 @@ export class EmpleadosComponent implements OnInit, OnDestroy {
   cdr = inject(ChangeDetectorRef);
   notification = inject(NotificationService);
   apiConfig = inject(ApiConfigService);
+  faceRecognition = inject(FaceRecognitionService);
 
   empForm: FormGroup;
 
@@ -72,6 +74,15 @@ export class EmpleadosComponent implements OnInit, OnDestroy {
   empleadoOriginal: any = null;
   formHasChanges = false;
   private intervaloAutoRefresh: any;
+
+  // Face enrollment
+  mostrarModalEnrollFace = false;
+  enrollEmpleado: any = null;
+  videoStreamEnroll: MediaStream | null = null;
+  capturedDescriptorsEnroll: Float32Array[] = [];
+  isCapturingFace = false;
+  isSavingEnrollment = false;
+  faceEnrollStep: 1 | 2 | 3 = 1;
 
   constructor() {
     this.fechaHoy = new Date().toISOString().split('T')[0];
@@ -1054,5 +1065,117 @@ export class EmpleadosComponent implements OnInit, OnDestroy {
   getEstadoIcono(estado: boolean | undefined): string {
     if (estado === undefined) return 'bi-question-circle';
     return estado ? 'bi-person-check' : 'bi-person-x';
+  }
+
+  // --- Face Enrollment Methods ---
+
+  async abrirEnrollFace(empleado: any) {
+    this.enrollEmpleado = empleado;
+    this.capturedDescriptorsEnroll = [];
+    this.faceEnrollStep = 1;
+    this.mostrarModalEnrollFace = true;
+
+    try {
+      await this.faceRecognition.loadModels();
+    } catch {
+      this.notification.error('Error al cargar modelos de reconocimiento facial', 'Error');
+    }
+  }
+
+  async iniciarCapturaFace() {
+    try {
+      this.faceEnrollStep = 2;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: 640, height: 480 }
+      });
+      this.videoStreamEnroll = stream;
+
+      setTimeout(() => {
+        const videoElement = document.getElementById('enrollVideo') as HTMLVideoElement;
+        if (videoElement) {
+          videoElement.srcObject = stream;
+        }
+      }, 100);
+    } catch {
+      this.notification.error('No se pudo acceder a la camara. Verifique los permisos del navegador.', 'Error');
+      this.cerrarEnrollFace();
+    }
+  }
+
+  async capturarRostro() {
+    if (this.isCapturingFace) return;
+
+    const videoElement = document.getElementById('enrollVideo') as HTMLVideoElement;
+    if (!videoElement) {
+      this.notification.error('Video no disponible', 'Error');
+      return;
+    }
+
+    this.isCapturingFace = true;
+
+    try {
+      const descriptor = await this.faceRecognition.detectSingleFace(videoElement);
+
+      if (descriptor) {
+        this.capturedDescriptorsEnroll.push(descriptor);
+        this.notification.success(
+          `Captura ${this.capturedDescriptorsEnroll.length} de 3 completada`,
+          'Rostro detectado'
+        );
+
+        if (this.capturedDescriptorsEnroll.length >= 3) {
+          this.faceEnrollStep = 3;
+          this.detenerCamaraEnroll();
+        }
+      } else {
+        this.notification.warning('No se detecto un rostro. Asegurese de tener buena iluminacion y mire a la camara.', 'Intente nuevamente');
+      }
+    } catch {
+      this.notification.error('Error al procesar la imagen', 'Error');
+    } finally {
+      this.isCapturingFace = false;
+    }
+  }
+
+  confirmarEnrollment() {
+    if (!this.enrollEmpleado || this.capturedDescriptorsEnroll.length === 0) return;
+
+    this.isSavingEnrollment = true;
+    const request = {
+      empleadoId: this.enrollEmpleado.id,
+      descriptors: this.capturedDescriptorsEnroll.map(d => Array.from(d)),
+      comentario: `Registro facial - ${new Date().toLocaleDateString()}`
+    };
+
+    this.faceRecognition.enrollFace(request).subscribe({
+      next: () => {
+        this.notification.success(
+          `Reconocimiento facial registrado para ${this.enrollEmpleado.nombre}`,
+          'Registro exitoso'
+        );
+        this.isSavingEnrollment = false;
+        this.cerrarEnrollFace();
+      },
+      error: (err) => {
+        this.notification.error(err.error?.error || 'Error al registrar rostro', 'Error');
+        this.isSavingEnrollment = false;
+      }
+    });
+  }
+
+  detenerCamaraEnroll() {
+    if (this.videoStreamEnroll) {
+      this.videoStreamEnroll.getTracks().forEach(track => track.stop());
+      this.videoStreamEnroll = null;
+    }
+  }
+
+  cerrarEnrollFace() {
+    this.detenerCamaraEnroll();
+    this.mostrarModalEnrollFace = false;
+    this.enrollEmpleado = null;
+    this.capturedDescriptorsEnroll = [];
+    this.faceEnrollStep = 1;
+    this.isSavingEnrollment = false;
   }
 }

@@ -1,0 +1,48 @@
+.marcaje-container {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.video-wrapper {
+  max-width: 100%;
+}
+
+.video-feed {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 576px) {
+  .marcaje-container {
+    padding: 0 0.5rem;
+  }
+
+  .video-feed {
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  .card-body {
+    padding: 1rem;
+  }
+
+  .btn-lg {
+    width: 100%;
+  }
+
+  .d-flex.gap-3 {
+    flex-direction: column;
+  }
+
+  .d-flex.gap-3 .btn {
+    width: 100%;
+  }
+
+  h3 {
+    font-size: 1.3rem;
+  }
+
+  h4 {
+    font-size: 1.1rem;
+  }
+}

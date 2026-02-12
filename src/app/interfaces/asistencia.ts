@@ -4,6 +4,7 @@ export interface AsistenciaRequest {
     fecha?: string;
     hora?: string;
     observaciones?: string;
+    metodoVerificacion?: string;
   }
   
   export interface AsistenciaResponse {

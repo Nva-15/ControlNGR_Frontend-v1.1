@@ -10,6 +10,7 @@ import { HorariosComponent } from './components/horarios/horarios';
 import { ReportesComponent } from './components/reportes/reportes';
 import { EventosComponent } from './components/eventos/eventos';
 import { EventoEstadisticasComponent } from './components/evento-estadisticas/evento-estadisticas';
+import { MarcarAsistencia } from './components/marcar-asistencia/marcar-asistencia';
 
 export const routes: Routes = [
   { 
@@ -66,6 +67,11 @@ export const routes: Routes = [
         path: 'eventos/:id/estadisticas',
         component: EventoEstadisticasComponent,
         title: 'Estadisticas del Evento'
+      },
+      {
+        path: 'marcar-asistencia',
+        component: MarcarAsistencia,
+        title: 'Marcaje Facial - Control NGR'
       },
     ]
   },

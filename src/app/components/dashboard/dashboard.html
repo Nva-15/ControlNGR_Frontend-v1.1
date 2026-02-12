@@ -90,12 +90,25 @@
               </div>
 
               <div class="d-grid gap-2">
-                <button class="btn btn-success py-2" (click)="tipoMarcaje='entrada'; marcarAsistencia()" [disabled]="!puedeMarcarEntrada()">
-                  <i class="bi bi-box-arrow-in-right me-1"></i> Entrada
-                </button>
-                <button class="btn btn-danger py-2" (click)="tipoMarcaje='salida'; marcarAsistencia()" [disabled]="!puedeMarcarSalida()">
-                  <i class="bi bi-box-arrow-right me-1"></i> Salida
-                </button>
+                <a routerLink="/marcar-asistencia"
+                   class="btn py-3 text-white"
+                   [class.btn-success]="puedeMarcarEntrada()"
+                   [class.btn-danger]="puedeMarcarSalida()"
+                   [class.btn-secondary]="!puedeMarcarEntrada() && !puedeMarcarSalida()"
+                   [class.disabled]="!puedeMarcarEntrada() && !puedeMarcarSalida()"
+                   [attr.tabindex]="!puedeMarcarEntrada() && !puedeMarcarSalida() ? -1 : 0"
+                   [style.pointer-events]="!puedeMarcarEntrada() && !puedeMarcarSalida() ? 'none' : 'auto'"
+                   [style.opacity]="!puedeMarcarEntrada() && !puedeMarcarSalida() ? '0.5' : '1'">
+                  <i class="bi me-2 fs-5"
+                     [ngClass]="puedeMarcarEntrada() ? 'bi-box-arrow-in-right' : puedeMarcarSalida() ? 'bi-box-arrow-right' : 'bi-check-circle-fill'"></i>
+                  <span class="fw-bold">
+                    {{ puedeMarcarEntrada() ? 'Marcar Entrada' : puedeMarcarSalida() ? 'Marcar Salida' : 'Asistencia Completa' }}
+                  </span>
+                  <br>
+                  <small class="opacity-75">
+                    {{ puedeMarcarEntrada() ? 'Reconocimiento facial' : puedeMarcarSalida() ? 'Reconocimiento facial' : 'Entrada y salida registradas' }}
+                  </small>
+                </a>
               </div>
 
               <div class="mt-3">
@@ -166,6 +179,23 @@
           <div class="card-body p-0">
             <div class="list-group list-group-flush">
               
+              <a routerLink="/marcar-asistencia"
+                 class="list-group-item list-group-item-action border-0 py-3 d-flex align-items-center"
+                 [class.bg-info]="puedeMarcarEntrada() || puedeMarcarSalida()"
+                 [class.bg-opacity-10]="puedeMarcarEntrada() || puedeMarcarSalida()"
+                 [class.disabled]="!puedeMarcarEntrada() && !puedeMarcarSalida()"
+                 [style.pointer-events]="!puedeMarcarEntrada() && !puedeMarcarSalida() ? 'none' : 'auto'"
+                 [style.opacity]="!puedeMarcarEntrada() && !puedeMarcarSalida() ? '0.4' : '1'">
+                <i class="bi fs-4 me-3"
+                   [ngClass]="puedeMarcarEntrada() ? 'bi-box-arrow-in-right text-success' : puedeMarcarSalida() ? 'bi-box-arrow-right text-danger' : 'bi-check-circle-fill text-secondary'"></i>
+                <div class="lh-1">
+                  <h6 class="mb-0" [ngClass]="puedeMarcarEntrada() ? 'text-success' : puedeMarcarSalida() ? 'text-danger' : 'text-secondary'">
+                    {{ puedeMarcarEntrada() ? 'Marcar Entrada' : puedeMarcarSalida() ? 'Marcar Salida' : 'Asistencia Completa' }}
+                  </h6>
+                  <small class="text-muted" style="font-size:0.75rem">Reconocimiento facial</small>
+                </div>
+              </a>
+
               <a routerLink="/horarios" class="list-group-item list-group-item-action border-0 py-3 d-flex align-items-center">
                 <i class="bi bi-calendar-week text-primary fs-4 me-3"></i>
                 <div class="lh-1">
@@ -552,6 +582,141 @@
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- Sección Reconocimiento Facial -->
+          <div class="card mb-4">
+            <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+              <h6 class="mb-0 text-primary"><i class="bi bi-person-check me-2"></i>Reconocimiento Facial</h6>
+              <div>
+                <span *ngIf="isCheckingEnroll" class="spinner-border spinner-border-sm text-primary"></span>
+                <span *ngIf="!isCheckingEnroll && faceEnrolled" class="badge bg-success">
+                  <i class="bi bi-check-circle me-1"></i>Registrado
+                </span>
+                <span *ngIf="!isCheckingEnroll && !faceEnrolled" class="badge bg-secondary">
+                  <i class="bi bi-x-circle me-1"></i>No registrado
+                </span>
+              </div>
+            </div>
+            <div class="card-body">
+
+              <!-- Estado: No enrollado y sin proceso activo -->
+              <div *ngIf="faceEnrollStep === 0 && !faceEnrolled" class="text-center py-3">
+                <i class="bi bi-camera-video text-muted" style="font-size: 2.5rem;"></i>
+                <p class="text-muted mt-2 mb-3">
+                  Registre su rostro para usar el marcaje con reconocimiento facial.
+                </p>
+                <button class="btn btn-primary" (click)="iniciarEnrollFacial()">
+                  <i class="bi bi-camera-fill me-2"></i>Registrar Mi Rostro
+                </button>
+              </div>
+
+              <!-- Estado: Ya enrollado -->
+              <div *ngIf="faceEnrollStep === 0 && faceEnrolled" class="text-center py-3">
+                <i class="bi bi-patch-check-fill text-success" style="font-size: 2.5rem;"></i>
+                <p class="text-success mt-2 mb-1 fw-bold">Rostro registrado correctamente</p>
+                <p class="text-muted small mb-3">
+                  Puede usar el marcaje facial desde el boton "Marcaje Facial" en el dashboard.
+                </p>
+                <div class="d-flex justify-content-center gap-2">
+                  <button class="btn btn-outline-primary btn-sm" (click)="iniciarEnrollFacial()">
+                    <i class="bi bi-arrow-repeat me-1"></i>Volver a registrar
+                  </button>
+                  <button class="btn btn-outline-danger btn-sm"
+                          (click)="eliminarEnrollFacial()"
+                          [disabled]="isSavingEnrollPerfil">
+                    <span *ngIf="isSavingEnrollPerfil" class="spinner-border spinner-border-sm me-1"></span>
+                    <i class="bi bi-trash me-1" *ngIf="!isSavingEnrollPerfil"></i>Eliminar registro
+                  </button>
+                </div>
+              </div>
+
+              <!-- Step 1: Instrucciones -->
+              <div *ngIf="faceEnrollStep === 1" class="text-center py-3">
+                <i class="bi bi-person-bounding-box text-primary" style="font-size: 2.5rem;"></i>
+                <h6 class="mt-2">Registro de Rostro</h6>
+                <p class="text-muted small mb-3">
+                  Se capturaran <strong>3 fotos</strong> de su rostro.
+                </p>
+                <div class="alert alert-info text-start small">
+                  <ul class="mb-0 ps-3">
+                    <li>Buena iluminacion, sin sombras</li>
+                    <li>Mire directamente a la camara</li>
+                    <li>Ligeros cambios de angulo entre capturas</li>
+                  </ul>
+                </div>
+                <div class="d-flex justify-content-center gap-2">
+                  <button class="btn btn-primary" (click)="iniciarCapturaFacePerfil()">
+                    <i class="bi bi-camera-video me-2"></i>Iniciar Camara
+                  </button>
+                  <button class="btn btn-outline-secondary" (click)="cancelarEnrollFacial()">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+
+              <!-- Step 2: Captura -->
+              <div *ngIf="faceEnrollStep === 2" class="text-center">
+                <div class="position-relative d-inline-block mb-3">
+                  <video id="perfilEnrollVideo"
+                         autoplay playsinline muted
+                         width="320" height="240"
+                         class="rounded border"
+                         style="max-width: 100%; transform: scaleX(-1);">
+                  </video>
+                  <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+                       *ngIf="isCapturingFacePerfil">
+                    <div class="spinner-border text-light" role="status"></div>
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <div class="d-flex justify-content-center gap-2 mb-2">
+                    <span *ngFor="let i of [1,2,3]"
+                          class="badge rounded-pill"
+                          [ngClass]="capturedDescriptorsPerfil.length >= i ? 'bg-success' : 'bg-secondary'">
+                      <i class="bi" [ngClass]="capturedDescriptorsPerfil.length >= i ? 'bi-check-circle' : 'bi-circle'"></i>
+                      {{i}}
+                    </span>
+                  </div>
+                  <small class="text-muted">{{capturedDescriptorsPerfil.length}} de 3</small>
+                </div>
+
+                <div class="d-flex justify-content-center gap-2">
+                  <button class="btn btn-primary"
+                          (click)="capturarRostroPerfil()"
+                          [disabled]="isCapturingFacePerfil || capturedDescriptorsPerfil.length >= 3">
+                    <i class="bi bi-camera me-1"></i>
+                    {{ isCapturingFacePerfil ? 'Procesando...' : 'Capturar' }}
+                  </button>
+                  <button class="btn btn-outline-secondary" (click)="cancelarEnrollFacial()">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+
+              <!-- Step 3: Confirmacion -->
+              <div *ngIf="faceEnrollStep === 3" class="text-center py-3">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 2.5rem;"></i>
+                <h6 class="mt-2 text-success">3 Capturas Completadas</h6>
+                <p class="text-muted small mb-3">Presione guardar para registrar su rostro.</p>
+                <div class="d-flex justify-content-center gap-2">
+                  <button class="btn btn-success"
+                          (click)="confirmarEnrollFacial()"
+                          [disabled]="isSavingEnrollPerfil">
+                    <span *ngIf="isSavingEnrollPerfil" class="spinner-border spinner-border-sm me-1"></span>
+                    <i class="bi bi-save me-1" *ngIf="!isSavingEnrollPerfil"></i>
+                    {{ isSavingEnrollPerfil ? 'Guardando...' : 'Guardar Registro' }}
+                  </button>
+                  <button class="btn btn-outline-secondary"
+                          (click)="cancelarEnrollFacial()"
+                          [disabled]="isSavingEnrollPerfil">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
 

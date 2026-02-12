@@ -213,8 +213,14 @@
                 
                 <td class="text-end pe-3">
                   <div class="d-flex justify-content-end gap-2">
-                    <button class="btn btn-sm btn-outline-primary" 
-                            (click)="editar(emp)" 
+                    <button class="btn btn-sm btn-outline-info"
+                            (click)="abrirEnrollFace(emp)"
+                            title="Registrar rostro"
+                            *ngIf="puedeGestionarEmpleados()">
+                      <i class="bi bi-camera-fill"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary"
+                            (click)="editar(emp)"
                             [title]="getTooltipEdicion(emp)"
                             *ngIf="puedeGestionarEmpleados()"
                             [disabled]="isLoading || !puedeEditarEmpleado(emp)">
@@ -716,4 +722,124 @@
   </div>
   <!-- Backdrop del Modal -->
   <div class="modal-backdrop fade show" *ngIf="mostrarModalEliminar"></div>
+
+  <!-- Modal de Enrollment Facial -->
+  <div class="modal fade show"
+       [class.d-block]="mostrarModalEnrollFace"
+       [style.display]="mostrarModalEnrollFace ? 'block' : 'none'"
+       tabindex="-1"
+       role="dialog"
+       *ngIf="mostrarModalEnrollFace">
+    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-info text-white">
+          <h5 class="modal-title">
+            <i class="bi bi-camera-fill me-2"></i>
+            Registro Facial — {{ enrollEmpleado?.nombre }}
+          </h5>
+          <button type="button"
+                  class="btn-close btn-close-white"
+                  (click)="cerrarEnrollFace()"
+                  [disabled]="isSavingEnrollment">
+          </button>
+        </div>
+        <div class="modal-body">
+
+          <!-- Step 1: Instrucciones -->
+          <div *ngIf="faceEnrollStep === 1" class="text-center py-4">
+            <i class="bi bi-person-bounding-box text-info" style="font-size: 4rem;"></i>
+            <h5 class="mt-3">Registro de Reconocimiento Facial</h5>
+            <p class="text-muted mb-4">
+              Se capturaran <strong>3 fotos</strong> del rostro del empleado para crear su perfil de reconocimiento facial.
+            </p>
+            <div class="alert alert-info text-start">
+              <h6><i class="bi bi-lightbulb me-2"></i>Instrucciones:</h6>
+              <ul class="mb-0">
+                <li>Asegurese de tener buena iluminacion</li>
+                <li>El empleado debe mirar directamente a la camara</li>
+                <li>Evite sombras fuertes en el rostro</li>
+                <li>Se tomaran 3 capturas con ligeros cambios de angulo</li>
+              </ul>
+            </div>
+            <button class="btn btn-info btn-lg text-white" (click)="iniciarCapturaFace()">
+              <i class="bi bi-camera-video me-2"></i>Iniciar Camara
+            </button>
+          </div>
+
+          <!-- Step 2: Captura -->
+          <div *ngIf="faceEnrollStep === 2" class="text-center">
+            <div class="position-relative d-inline-block mb-3">
+              <video id="enrollVideo"
+                     autoplay
+                     playsinline
+                     muted
+                     width="480"
+                     height="360"
+                     class="rounded border"
+                     style="max-width: 100%; transform: scaleX(-1);">
+              </video>
+              <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+                   *ngIf="isCapturingFace">
+                <div class="spinner-border text-light" role="status">
+                  <span class="visually-hidden">Procesando...</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <div class="d-flex justify-content-center gap-2 mb-2">
+                <span *ngFor="let i of [1,2,3]"
+                      class="badge rounded-pill fs-6"
+                      [ngClass]="capturedDescriptorsEnroll.length >= i ? 'bg-success' : 'bg-secondary'">
+                  <i class="bi" [ngClass]="capturedDescriptorsEnroll.length >= i ? 'bi-check-circle' : 'bi-circle'"></i>
+                  Captura {{i}}
+                </span>
+              </div>
+              <small class="text-muted">{{capturedDescriptorsEnroll.length}} de 3 capturas completadas</small>
+            </div>
+
+            <button class="btn btn-primary btn-lg"
+                    (click)="capturarRostro()"
+                    [disabled]="isCapturingFace || capturedDescriptorsEnroll.length >= 3">
+              <i class="bi bi-camera me-2"></i>
+              {{ isCapturingFace ? 'Procesando...' : 'Capturar Rostro' }}
+            </button>
+          </div>
+
+          <!-- Step 3: Confirmacion -->
+          <div *ngIf="faceEnrollStep === 3" class="text-center py-4">
+            <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+            <h5 class="mt-3 text-success">Capturas Completadas</h5>
+            <p class="text-muted mb-4">
+              Se capturaron exitosamente <strong>3 muestras faciales</strong> para
+              <strong>{{ enrollEmpleado?.nombre }}</strong>.
+            </p>
+            <div class="alert alert-warning">
+              <i class="bi bi-exclamation-triangle me-2"></i>
+              Presione <strong>"Guardar Registro"</strong> para enviar los datos al servidor.
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button"
+                  class="btn btn-secondary"
+                  (click)="cerrarEnrollFace()"
+                  [disabled]="isSavingEnrollment">
+            <i class="bi bi-x-circle me-1"></i>Cancelar
+          </button>
+          <button type="button"
+                  class="btn btn-success"
+                  (click)="confirmarEnrollment()"
+                  *ngIf="faceEnrollStep === 3"
+                  [disabled]="isSavingEnrollment">
+            <span *ngIf="isSavingEnrollment" class="spinner-border spinner-border-sm me-2"></span>
+            <i class="bi bi-save me-1" *ngIf="!isSavingEnrollment"></i>
+            {{ isSavingEnrollment ? 'Guardando...' : 'Guardar Registro' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show" *ngIf="mostrarModalEnrollFace"></div>
 </div>

@@ -1,1 +1,195 @@
-<p>marcar-asistencia works!</p>
+<div class="container mt-4 marcaje-container">
+  <!-- Header -->
+  <div class="d-flex align-items-center mb-4">
+    <button class="btn btn-outline-secondary me-3 rounded-circle"
+            (click)="volverAlDashboard()"
+            title="Volver al Dashboard">
+      <i class="bi bi-arrow-left"></i>
+    </button>
+    <div>
+      <h3 class="text-primary fw-bold mb-0">
+        <i class="bi bi-person-check-fill me-2"></i>Marcaje con Reconocimiento Facial
+      </h3>
+      <small class="text-muted" *ngIf="currentEmpleado">
+        {{ currentEmpleado.nombre }} — {{ tipoMarcaje === 'entrada' ? 'Registrar Entrada' : 'Registrar Salida' }}
+      </small>
+    </div>
+  </div>
+
+  <!-- Error message -->
+  <div class="alert alert-danger" *ngIf="errorMessage">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ errorMessage }}
+  </div>
+
+  <!-- Estado: Cargando -->
+  <div *ngIf="estado === 'cargando'" class="card shadow">
+    <div class="card-body text-center py-5">
+      <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+        <span class="visually-hidden">Cargando...</span>
+      </div>
+      <h5 class="text-muted">Inicializando sistema de reconocimiento facial...</h5>
+      <p class="text-muted small">Cargando modelos y verificando enrollment</p>
+    </div>
+  </div>
+
+  <!-- Estado: No enrollado -->
+  <div *ngIf="estado === 'no-enrollado'" class="card shadow">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-person-x-fill text-warning" style="font-size: 4rem;"></i>
+      <h4 class="mt-3">Rostro No Registrado</h4>
+      <p class="text-muted mb-4">
+        No se encontro un registro facial para su cuenta.<br>
+        Solicite a un administrador o supervisor que registre su rostro desde la seccion de empleados.
+      </p>
+      <div class="d-flex justify-content-center gap-3 flex-wrap">
+        <button class="btn btn-outline-primary" (click)="marcajeManual()">
+          <i class="bi bi-hand-index me-2"></i>Marcaje Manual
+        </button>
+        <button class="btn btn-outline-secondary" (click)="volverAlDashboard()">
+          <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado: Ya marco -->
+  <div *ngIf="estado === 'ya-marco'" class="card shadow">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+      <h4 class="mt-3 text-success">Asistencia Completa</h4>
+      <p class="text-muted mb-3">Ya ha registrado su entrada y salida del dia de hoy.</p>
+      <div *ngIf="asistenciaHoy" class="card bg-light mx-auto" style="max-width: 300px;">
+        <div class="card-body">
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Entrada:</span>
+            <strong class="text-success">{{ asistenciaHoy.horaEntrada }}</strong>
+          </div>
+          <div class="d-flex justify-content-between">
+            <span class="text-muted">Salida:</span>
+            <strong class="text-danger">{{ asistenciaHoy.horaSalida }}</strong>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-outline-secondary mt-4" (click)="volverAlDashboard()">
+        <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
+      </button>
+    </div>
+  </div>
+
+  <!-- Estado: Listo para iniciar -->
+  <div *ngIf="estado === 'listo'" class="card shadow">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-camera-video-fill text-info" style="font-size: 4rem;"></i>
+      <h4 class="mt-3">Listo para Verificar</h4>
+      <p class="text-muted mb-2">
+        Presione el boton para activar la camara y verificar su identidad.
+      </p>
+      <p class="mb-4">
+        <span class="badge" [ngClass]="tipoMarcaje === 'entrada' ? 'bg-success' : 'bg-danger'" style="font-size: 1rem;">
+          <i class="bi" [ngClass]="tipoMarcaje === 'entrada' ? 'bi-box-arrow-in-right' : 'bi-box-arrow-right'"></i>
+          {{ tipoMarcaje === 'entrada' ? 'Registrar Entrada' : 'Registrar Salida' }}
+        </span>
+      </p>
+
+      <div *ngIf="asistenciaHoy?.horaEntrada && !asistenciaHoy?.horaSalida"
+           class="alert alert-info mx-auto mb-4" style="max-width: 400px;">
+        <i class="bi bi-info-circle me-2"></i>
+        Entrada registrada a las <strong>{{ asistenciaHoy.horaEntrada }}</strong>.
+        Ahora registre su salida.
+      </div>
+
+      <div class="d-flex justify-content-center gap-3 flex-wrap">
+        <button class="btn btn-primary btn-lg" (click)="abrirCamara()">
+          <i class="bi bi-camera-video me-2"></i>Activar Camara
+        </button>
+        <button class="btn btn-outline-secondary" (click)="marcajeManual()">
+          <i class="bi bi-hand-index me-2"></i>Marcaje Manual
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado: Camara activa -->
+  <div *ngIf="estado === 'camara-activa' || estado === 'verificando'" class="card shadow">
+    <div class="card-body text-center">
+      <div class="position-relative d-inline-block mb-3 video-wrapper">
+        <video id="marcajeVideo"
+               autoplay
+               playsinline
+               muted
+               width="480"
+               height="360"
+               class="rounded border video-feed"
+               style="transform: scaleX(-1);">
+        </video>
+
+        <!-- Overlay de verificacion -->
+        <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center rounded"
+             *ngIf="isVerifying"
+             style="background: rgba(0,0,0,0.5);">
+          <div class="text-white text-center">
+            <div class="spinner-border text-light mb-2" role="status">
+              <span class="visually-hidden">Verificando...</span>
+            </div>
+            <p class="mb-0">{{ livenessMessage || 'Verificando identidad...' }}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <span class="badge" [ngClass]="tipoMarcaje === 'entrada' ? 'bg-success' : 'bg-danger'" style="font-size: 0.9rem;">
+          {{ tipoMarcaje === 'entrada' ? 'Entrada' : 'Salida' }}
+        </span>
+      </div>
+
+      <div class="d-flex justify-content-center gap-3 flex-wrap">
+        <button class="btn btn-success btn-lg"
+                (click)="verificarYMarcar()"
+                [disabled]="isVerifying">
+          <i class="bi bi-shield-check me-2"></i>
+          {{ isVerifying ? 'Verificando...' : 'Verificar y Marcar' }}
+        </button>
+        <button class="btn btn-outline-secondary"
+                (click)="marcajeManual()"
+                [disabled]="isVerifying">
+          <i class="bi bi-hand-index me-2"></i>Manual
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado: Resultado exitoso -->
+  <div *ngIf="estado === 'resultado' && marcajeRegistrado" class="card shadow">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-patch-check-fill text-success" style="font-size: 5rem;"></i>
+      <h3 class="mt-3 text-success">Verificacion Exitosa</h3>
+      <p class="text-muted mb-2">
+        {{ tipoMarcaje === 'entrada' ? 'Entrada' : 'Salida' }} registrada con reconocimiento facial.
+      </p>
+
+      <div *ngIf="verificationResult" class="mb-3">
+        <span class="badge bg-success fs-6">
+          <i class="bi bi-check-circle me-1"></i>
+          Confianza: {{ verificationResult.confidence }}%
+        </span>
+      </div>
+
+      <div *ngIf="asistenciaHoy" class="card bg-light mx-auto mb-4" style="max-width: 300px;">
+        <div class="card-body">
+          <div class="d-flex justify-content-between mb-2" *ngIf="asistenciaHoy.horaEntrada">
+            <span class="text-muted">Entrada:</span>
+            <strong class="text-success">{{ asistenciaHoy.horaEntrada }}</strong>
+          </div>
+          <div class="d-flex justify-content-between" *ngIf="asistenciaHoy.horaSalida">
+            <span class="text-muted">Salida:</span>
+            <strong class="text-danger">{{ asistenciaHoy.horaSalida }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" (click)="volverAlDashboard()">
+        <i class="bi bi-house me-2"></i>Volver al Dashboard
+      </button>
+    </div>
+  </div>
+</div>

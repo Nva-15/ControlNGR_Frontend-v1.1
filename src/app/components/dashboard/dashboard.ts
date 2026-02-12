@@ -10,6 +10,7 @@ import { NotificationService } from '../../services/notification.service';
 import { ApiConfigService } from '../../services/api-config.service';
 import { EventosService } from '../../services/eventos';
 import { NotificacionesService } from '../../services/notificaciones';
+import { FaceRecognitionService } from '../../services/face-recognition.service';
 import { HorarioSemanal, HorarioDia } from '../../interfaces/horario';
 import { Evento, RespuestaEventoRequest } from '../../interfaces/evento';
 
@@ -33,6 +34,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private apiConfig = inject(ApiConfigService);
   private eventosService = inject(EventosService);
   private notificacionesService = inject(NotificacionesService);
+  private faceRecognition = inject(FaceRecognitionService);
   private http = inject(HttpClient);
   private router = inject(Router);
 
@@ -75,6 +77,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   eventoSeleccionado: Evento | null = null;
   mostrarModalEvento = false;
   respuestaEnviando = false;
+
+  // Face enrollment (perfil)
+  faceEnrollStep: 0 | 1 | 2 | 3 = 0; // 0=cerrado, 1=instrucciones, 2=captura, 3=confirmacion
+  videoStreamPerfil: MediaStream | null = null;
+  capturedDescriptorsPerfil: Float32Array[] = [];
+  isCapturingFacePerfil = false;
+  isSavingEnrollPerfil = false;
+  faceEnrolled = false;
+  isCheckingEnroll = false;
 
   ngOnInit() {
     this.currentEmpleado = this.auth.getCurrentEmpleado();
@@ -297,12 +308,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.mensajeModal = '';
     this.mensajeErrorModal = '';
     this.mostrarModalPerfil = true;
+    this.verificarEnrollFacial();
   }
 
   cerrarModalPerfil() {
     this.mostrarModalPerfil = false;
     this.fotoPreviewModal = null;
     this.fotoFileModal = null;
+    this.cancelarEnrollFacial();
     if (this.fileInputModal) {
       this.fileInputModal.nativeElement.value = '';
     }
@@ -737,6 +750,143 @@ export class DashboardComponent implements OnInit, OnDestroy {
     } else {
       this.cerrarModalEvento();
     }
+  }
+
+  // ==================== FACE ENROLLMENT (PERFIL) ====================
+
+  verificarEnrollFacial() {
+    if (!this.currentEmpleado?.id) return;
+    this.isCheckingEnroll = true;
+    this.faceRecognition.checkEnrolled(this.currentEmpleado.id).subscribe({
+      next: (res) => {
+        this.faceEnrolled = res.enrolled;
+        this.isCheckingEnroll = false;
+      },
+      error: () => {
+        this.faceEnrolled = false;
+        this.isCheckingEnroll = false;
+      }
+    });
+  }
+
+  async iniciarEnrollFacial() {
+    this.faceEnrollStep = 1;
+    this.capturedDescriptorsPerfil = [];
+    try {
+      await this.faceRecognition.loadModels();
+    } catch {
+      this.mostrarErrorModal('Error al cargar modelos de reconocimiento facial');
+    }
+  }
+
+  async iniciarCapturaFacePerfil() {
+    try {
+      this.faceEnrollStep = 2;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: 640, height: 480 }
+      });
+      this.videoStreamPerfil = stream;
+
+      setTimeout(() => {
+        const video = document.getElementById('perfilEnrollVideo') as HTMLVideoElement;
+        if (video) {
+          video.srcObject = stream;
+        }
+      }, 100);
+    } catch {
+      this.mostrarErrorModal('No se pudo acceder a la camara. Verifique los permisos del navegador.');
+      this.cancelarEnrollFacial();
+    }
+  }
+
+  async capturarRostroPerfil() {
+    if (this.isCapturingFacePerfil) return;
+
+    const video = document.getElementById('perfilEnrollVideo') as HTMLVideoElement;
+    if (!video) {
+      this.mostrarErrorModal('Video no disponible');
+      return;
+    }
+
+    this.isCapturingFacePerfil = true;
+
+    try {
+      const descriptor = await this.faceRecognition.detectSingleFace(video);
+
+      if (descriptor) {
+        this.capturedDescriptorsPerfil.push(descriptor);
+        this.notification.success(
+          `Captura ${this.capturedDescriptorsPerfil.length} de 3 completada`,
+          'Rostro detectado'
+        );
+
+        if (this.capturedDescriptorsPerfil.length >= 3) {
+          this.faceEnrollStep = 3;
+          this.detenerCamaraPerfil();
+        }
+      } else {
+        this.notification.warning('No se detecto un rostro. Asegurese de tener buena iluminacion y mire a la camara.', 'Intente nuevamente');
+      }
+    } catch {
+      this.mostrarErrorModal('Error al procesar la imagen');
+    } finally {
+      this.isCapturingFacePerfil = false;
+    }
+  }
+
+  confirmarEnrollFacial() {
+    if (!this.currentEmpleado?.id || this.capturedDescriptorsPerfil.length === 0) return;
+
+    this.isSavingEnrollPerfil = true;
+    const request = {
+      empleadoId: this.currentEmpleado.id,
+      descriptors: this.capturedDescriptorsPerfil.map(d => Array.from(d)),
+      comentario: `Auto-registro facial - ${new Date().toLocaleDateString()}`
+    };
+
+    this.faceRecognition.enrollFace(request).subscribe({
+      next: () => {
+        this.notification.success('Rostro registrado exitosamente', 'Registro Facial');
+        this.faceEnrolled = true;
+        this.isSavingEnrollPerfil = false;
+        this.cancelarEnrollFacial();
+      },
+      error: (err) => {
+        this.mostrarErrorModal(err.error?.error || 'Error al registrar rostro');
+        this.isSavingEnrollPerfil = false;
+      }
+    });
+  }
+
+  eliminarEnrollFacial() {
+    if (!this.currentEmpleado?.id) return;
+    this.isSavingEnrollPerfil = true;
+    this.faceRecognition.deleteDescriptors(this.currentEmpleado.id).subscribe({
+      next: () => {
+        this.notification.success('Registro facial eliminado', 'Eliminado');
+        this.faceEnrolled = false;
+        this.isSavingEnrollPerfil = false;
+      },
+      error: (err) => {
+        this.mostrarErrorModal(err.error?.error || 'Error al eliminar registro facial');
+        this.isSavingEnrollPerfil = false;
+      }
+    });
+  }
+
+  detenerCamaraPerfil() {
+    if (this.videoStreamPerfil) {
+      this.videoStreamPerfil.getTracks().forEach(track => track.stop());
+      this.videoStreamPerfil = null;
+    }
+  }
+
+  cancelarEnrollFacial() {
+    this.detenerCamaraPerfil();
+    this.faceEnrollStep = 0;
+    this.capturedDescriptorsPerfil = [];
+    this.isCapturingFacePerfil = false;
+    this.isSavingEnrollPerfil = false;
   }
 
   // ==================== NOTIFICACIONES POST-LOGIN ====================
