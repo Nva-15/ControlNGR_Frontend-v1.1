@@ -14,7 +14,9 @@
       "Bash(git push:*)",
       "WebSearch",
       "Bash(git tag:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(.gradlew.bat bootJar:*)"
     ]
   }
 }
